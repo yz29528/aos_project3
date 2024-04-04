@@ -104,6 +104,7 @@ struct thread
 
   struct file** fd_table; // Map fd (index) to files
 
+  struct hash* page_table;
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t *pagedir; /* Page directory. */

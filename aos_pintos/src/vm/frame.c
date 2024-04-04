@@ -39,15 +39,7 @@ struct frame_table_entry* frame_find_entry(void *frame) {
     return e!=NULL?hash_entry(e,struct frame_table_entry,he):NULL;
 }
 
-//todo
-void* frame_evict_used_fr(struct frame_table_entry *entry,void* upage){
-    entry->upage=upage;
-    entry->holder= thread_current();
-    list_remove (&frame_list,&entry->le);
-    list_push_front(&frame_list,&entry->le);
-}
-
-
+// call it in timer to approximate LRU.
 void frame_lift_fr(void *frame) {
     struct frame_table_entry *entry;
     for (struct list_elem* e = list_rbegin(&frame_list); e != list_rend(&frame_list); e = list_prev(e)){
@@ -56,25 +48,29 @@ void frame_lift_fr(void *frame) {
             pagedir_set_accessed(entry->holder->pagedir, entry->upage, false);
             list_remove(&entry->le)
             list_push_front(&frame_list,&entry->le);
+            break;
         }
     }
 }
 
 
 void* frame_get_used_fr(void *upage) {
-    /*
-    struct frame_table_entry *entry;
-    for (struct list_elem* e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
-        entry= list_entry(e, struct frame_table_entry, le);
-        if(pagedir_is_accessed(entry->holder->pagedir, entry->upage)){
-            pagedir_set_accessed(entry->holder->pagedir, entry->upage, false);
-        }else{
-            return frame_evict_used_fr(entry,upage);
+
+    struct list_elem* e =list_pop_back(&frame_list);
+    ASSERT(e!=NULL);
+    struct page_table_entry *entry = list_entry(e, struct frame_table_entry, le);
+
+    block_sector_t index = swap_store(entry->frame);
+        if (index == (block_sector_t)-1) {
+            return NULL;
         }
-    }
-    entry= list_entry(list_front(&frame_list), struct frame_table_entry, le);
-     */
-    return frame_evict_used_fr(entry,upage);
+     ASSERT(page_evict_upage(entry->holder, current_frame->upage, index, true));
+
+    entry->upage=upage;
+    list_remove(&e);
+    list_push_front(&e);
+
+    return entry;
 }
 //get a frame from user pool, which must be mapped from upage
 //in other words, in page_table, upage->frame_get_frame(flag, upage)

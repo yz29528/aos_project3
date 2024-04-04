@@ -47,6 +47,24 @@ void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     free(entry);
 }
 
+
+boolean page_evict_upage(struct thread *holder, void *upage, uint32_t index){
+    struct hash_elem* e = page_find(holder->page_table, upage);
+    ASSERT(e!=NULL);
+
+    struct page_table_entry *entry =  hash_entry(e,struct page_table_entry, he);
+    if(entry == NULL || entry->status != FRAME) {
+        return false;
+    }
+    entry->value = index;
+    entry->status = SWAP;
+    pagedir_clear_page(holder->pagedir, upage);
+    return true;
+}
+
+
+
+
 // called in thread_exit?
 void page_destroy(struct hash* page_table) {
     lock_acquire(&page_table_lock);
@@ -82,7 +100,6 @@ bool page_fault_handler(const void *vaddr, bool to_write, void *esp) {
                     entry->val = dest;
                     entry->status = FRAME;
                     entry->writable = true;
-                    entry->origin = NULL;
                     hash_insert(page_table, &entry->he);
                     success=true;
                 }
@@ -102,11 +119,6 @@ bool page_fault_handler(const void *vaddr, bool to_write, void *esp) {
         if (dest != NULL) {
             if(entry->status == SWAP) {
                 swap_load((index_t) t->value, dest);
-                entry->value = dest;
-                entry->status = FRAME;
-                success=true;
-            }else if(entry->status == FILE){
-                mmap_read_file(t->value, upage, dest);
                 entry->value = dest;
                 entry->status = FRAME;
                 success=true;

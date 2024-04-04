@@ -5,26 +5,26 @@
 #ifndef VM_SWAP_H
 #define VM_SWAP_H
 
-struct frame_table_entry{
-    void *frame;
-    void *upage;
-    struct thread* holder;
-    struct hash_elem he;
+struct swap_slot{
+    block_sector_t offset;
+//    struct hash_elem hash_elem;
     struct list_elem le;
 };
+//initialize swap when kernel starts
+//used in thread/init.c
+void swap_init();
 
-void *frame_find_fr(void *frame);
+//store the content of a kpage(frame) to a swap slot(on the disk)
+//return an identifier of the swap slot
+block_sector_t swap_store(void *kpage);
 
-//init frame_table
-void  frame_init();
+//load a swap slot to the kpage(frame)
+//index must be got from swap_store()
+void swap_load(block_sector_t index, void *kpage);
 
-//get a frame from user pool, which must be mapped from upage
-//flag is used by palloc_get_page
-void* frame_get_fr(enum palloc_flags flag, void *upage);
+void swap_free_swap_slot(block_sector_t index);
 
-//free a frame that got from frame_get_frame
-void  frame_free_fr(void *frame);
-
+block_sector_t swap_get_swap_slot();
 
 
 #endif //AOS_PROJECT3_SWAP_H
