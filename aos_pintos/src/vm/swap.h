@@ -2,8 +2,9 @@
 // Created by Administrator on 2024/4/4.
 //
 
-#ifndef AOS_PROJECT3_SWAP_H
-#define AOS_PROJECT3_SWAP_H
+#ifndef VM_SWAP_H
+#define VM_SWAP_H
+
 struct frame_table_entry{
     void *frame;
     void *upage;
