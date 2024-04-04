@@ -1,4 +1,7 @@
-
+#include <stdio.h>
+#include "page.h"
+#include "frame.h"
+#include "swap.h"
 // Created by zhangyifan on 2024/4/2.
 //store the empty swap slot. reuse them later.
 static struct list swap_slot_list;

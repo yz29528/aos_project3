@@ -1,6 +1,9 @@
 
 
-
+#include <stdio.h>
+#include "page.h"
+#include "frame.h"
+#include "swap.h"
 static struct hash frame_table;
 static struct list frame_list;
 static struct list frame_table_lock;
