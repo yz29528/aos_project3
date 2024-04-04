@@ -84,12 +84,6 @@ void* frame_get_fr(enum palloc_flags flag, void *upage) {
     lock_acquire(&frame_table_lock);
     struct frame_table_entry *entry;
     void *frame = palloc_get_page(PAL_USER | flag);
-
-
-    if (frame != NULL){
-        frame=frame_get_used_fr(upage)
-    }
-    // PANIC ("run out of user pool!");
     if (frame != NULL){
         ASSERT(pg_ofs(frame) == 0);
         if (flag == PAL_ZERO){
@@ -98,8 +92,14 @@ void* frame_get_fr(enum palloc_flags flag, void *upage) {
         entry=frame_create_frame_table_entry(upage,frame);
         list_push_front(&frame_list,&entry->le);
         hash_insert(&frame_table, &entry->he);
+    }else{
+        frame=frame_get_used_fr(upage);
+        if (frame != NULL){
+            list_remove(&entry->le)
+            list_push_front(&frame_list,&entry->le);
+        }
     }
-
+       // PANIC("run out of user pool and !");
     lock_release(&frame_table_lock);
     return frame;
 }
