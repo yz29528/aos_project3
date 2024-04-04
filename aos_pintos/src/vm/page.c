@@ -38,8 +38,7 @@ void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     struct page_table_entry *entry = hash_entry(e, struct page_table_entry, he);
     if(entry->page_status==FRAME){
         //todo
-
-
+        frame_free_fr((void*)entry->val);
     }else if(entry->page_status==SWAP){
         uint32_t index=entry->val;
         swap_free_swap_slot(index);
