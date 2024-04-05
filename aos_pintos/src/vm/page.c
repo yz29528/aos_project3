@@ -10,10 +10,11 @@
 #include "threads/malloc.h"
 #include "lib/debug.h"
 
-#define PAGE_PAL_FLAG			0
+#define PAL_DEFAULT			0
 #define POINTER_SIZE		32
-#define PAGE_STACK_SIZE			0x800000
-#define PAGE_STACK_UNDERLINE	((uint32_t)PHYS_BASE - (uint32_t)PAGE_STACK_SIZE)
+//On many GNU/Linux systems, the default limit is 8 MB
+#define PAGE_STACK_LIMIT			0x800000
+#define PAGE_STACK_UNDERLINE	((uint32_t)PHYS_BASE - (uint32_t) PAGE_STACK_LIMIT)
 
 static struct lock page_table_lock;
 bool page_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
@@ -135,41 +136,30 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
     struct page_table_entry* entry = page_find(page_table, upage);
 
 
-    void *dest = NULL;
+    void *kpage = NULL;
 
     if(upage >= (void*)PAGE_STACK_UNDERLINE) {
         if(vaddr >= (void*)((unsigned int)(esp) - POINTER_SIZE)) {
             if(entry == NULL) {
-                dest = frame_get_fr(PAGE_PAL_FLAG, upage);
+                kpage = frame_get_fr(PAL_DEFAULT, upage);
                 // if get a frame from user pool
-                if(dest != NULL) {
+                if(kpage != NULL) {
                     entry = malloc(sizeof(struct page_table_entry));
                     entry->key = upage;
-                    entry->val = (uint32_t)dest;
+                    entry->val = (uint32_t)kpage;
                     entry->status = FRAME;
                     entry->writable = true;
                     hash_insert(page_table, &entry->he);
                     success=true;
                 }
             }else if(entry->status==SWAP) {
-                dest = frame_get_fr(PAGE_PAL_FLAG, upage);
-                if(dest != NULL) {
-                    swap_load( entry->val, dest);
-                    entry->val =(uint32_t) dest;
+                kpage = frame_get_fr(PAL_DEFAULT, upage);
+                if(kpage != NULL) {
+                    swap_load( entry->val, kpage);
+                    entry->val =(uint32_t) kpage;
                     entry->status = FRAME;
                     success=true;
                 }
-            }
-        }
-    }else if(entry!=NULL && entry->status!=FRAME){
-        //todo grown stack
-        dest = frame_get_fr(PAGE_PAL_FLAG, upage);
-        if (dest != NULL) {
-            if(entry->status == SWAP) {
-                swap_load(entry->val, dest);
-                entry->val = (uint32_t)dest;
-                entry->status = FRAME;
-                success=true;
             }
         }
     }
@@ -179,7 +169,7 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
    UPAGE to the physical frame identified by kernel virtual
    address KPAGE.*/
     if(success) {
-        pagedir_set_page (pagedir, upage, dest,writable);
+        pagedir_set_page (pagedir, upage, kpage,writable);
     }
     lock_release(&page_table_lock);
     return success;
