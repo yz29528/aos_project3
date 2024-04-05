@@ -56,7 +56,6 @@ void frame_lift_fr(void *frame) {
     }
 }
 
-
 void* frame_get_used_fr(void *upage) {
 
     struct list_elem* e =list_pop_back(&frame_list);
@@ -67,13 +66,11 @@ void* frame_get_used_fr(void *upage) {
         if (index == (block_sector_t)-1) {
             return NULL;
         }
-     ASSERT(page_evict_upage(entry->holder, entry->upage, index, true));
-
+    ASSERT(page_evict_upage(entry->holder, entry->upage, index, true));
     entry->upage=upage;
     entry->holder=thread_current();
     list_remove(&e);
-    list_push_front(&e);
-
+    list_push_front(&frame_list,&e);
     return entry;
 }
 //get a frame from user pool, which must be mapped from upage

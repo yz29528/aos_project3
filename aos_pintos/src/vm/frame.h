@@ -4,7 +4,7 @@
 #include "devices/block.h"
 #include "lib/kernel/list.h"
 #include "lib/kernel/hash.h"
-
+#include "threads/thread.h"
 struct frame_table_entry{
     void *frame;
     void *upage;
