@@ -3,7 +3,11 @@
 #include "frame.h"
 #include "swap.h"
 #include "threads/synch.h"
-
+#include "userprog/pagedir.h"
+#include "threads/malloc.h"
+#include "threads/palloc.h"
+#include "lib/debug.h"
+#include "lib/stddef.h"
 static struct hash frame_table;
 static struct list frame_list;
 static struct list frame_table_lock;

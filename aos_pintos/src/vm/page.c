@@ -2,7 +2,14 @@
 #include "page.h"
 #include "frame.h"
 #include "swap.h"
+#include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
+#include "userprog/pagedir.h"
+#include "lib/stddef.h"
+#include "threads/malloc.h"
+#include "lib/debug.h"
+
 #define PAGE_PAL_FLAG			0
 #define POINTER_SIZE		32
 #define PAGE_STACK_SIZE			0x800000
