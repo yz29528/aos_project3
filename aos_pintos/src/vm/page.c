@@ -38,6 +38,7 @@ struct hash* page_create_table() {
     return page_table;
 }
 
+
 void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     struct page_table_entry *entry = hash_entry(e, struct page_table_entry, he);
     if(entry->page_status==FRAME){
@@ -49,6 +50,10 @@ void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     }
     free(entry);
 }
+
+
+
+
 
 
 boolean page_evict_upage(struct thread *holder, void *upage, uint32_t index){
@@ -65,14 +70,41 @@ boolean page_evict_upage(struct thread *holder, void *upage, uint32_t index){
     return true;
 }
 
-
-
-
 // called in thread_exit?
 void page_destroy(struct hash* page_table) {
     lock_acquire(&page_table_lock);
     hash_destroy(page_table, page_table_destructor);
     lock_release(&page_table_lock);
+}
+
+
+
+
+
+
+/* Verify that there's not already a page at that virtual
+ address, then map our page there. */
+bool page_set_frame(void *upage, void *kpage, bool writable) {
+    struct thread *cur = thread_current();
+    struct hash* page_table = cur->page_table;
+    uint32_t *pagedir = cur->pagedir;
+
+    lock_acquire(&page_table_lock);
+    struct page_table_entry* entry = page_find(&page_table, upage);
+    if(entry == NULL) {
+        entry = malloc(sizeof(struct page_table_entry));
+        entry->upage = upage;
+        entry->val = (uint32_t)kpage;
+        entry->status = FRAME;
+        entry->writable = writable;
+        hash_insert(page_table, &entry->he);
+
+        ASSERT(pagedir_set_page(pagedir, entry->upage, entry->val, entry->writable));
+        lock_release(&page_table_lock);
+        return true;
+    }
+    lock_release(&page_table_lock);
+    return false;
 }
 
 
@@ -141,26 +173,3 @@ bool page_fault_handler(const void *vaddr, bool to_write, void *esp) {
 }
 
 
-/* Verify that there's not already a page at that virtual
- address, then map our page there. */
-bool page_set_frame(void *upage, void *kpage, bool writable) {
-    struct thread *cur = thread_current();
-    struct hash* page_table = cur->page_table;
-    uint32_t *pagedir = cur->pagedir;
-
-    lock_acquire(&page_table_lock);
-    struct page_table_entry* entry = page_find(page_table, upage);
-    if(entry == NULL) {
-        entry = malloc(sizeof(struct page_table_entry));
-        entry->upage = upage;
-        entry->val = kpage;
-        entry->status = FRAME;
-        entry->writable = writable;
-        hash_insert(page_table, &entry->he);
-
-        ASSERT(pagedir_set_page(pagedir, entry->upage, entry->val, entry->writable));
-        lock_release(&page_table_lock);
-        return true;
-    }
-    return false;
-}

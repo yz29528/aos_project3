@@ -61,7 +61,7 @@ void* frame_get_used_fr(void *upage) {
 
     struct list_elem* e =list_pop_back(&frame_list);
     ASSERT(e!=NULL);
-    struct page_table_entry *entry = list_entry(e, struct frame_table_entry, le);
+    struct frame_table_entry *entry = list_entry(e, struct frame_table_entry, le);
 
     block_sector_t index = swap_store(entry->frame);
         if (index == (block_sector_t)-1) {
@@ -70,6 +70,7 @@ void* frame_get_used_fr(void *upage) {
      ASSERT(page_evict_upage(entry->holder, current_frame->upage, index, true));
 
     entry->upage=upage;
+    entry->holder=thread_current();
     list_remove(&e);
     list_push_front(&e);
 
