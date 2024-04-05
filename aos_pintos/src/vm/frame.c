@@ -7,10 +7,12 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "lib/debug.h"
+#include "lib/string.h"
 #include "lib/stddef.h"
+#include "threads/vaddr.h"
 static struct hash frame_table;
 static struct list frame_list;
-static struct list frame_table_lock;
+static struct lock frame_table_lock;
 static unsigned frame_hash(const struct hash_elem *e, void* aux UNUSED);
 static bool frame_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 
@@ -100,7 +102,7 @@ void* frame_get_fr(enum palloc_flags flag, void *upage) {
     }else{
         frame=frame_get_used_fr(upage);
         if (frame != NULL){
-            list_remove(&entry->le)
+            list_remove(&entry->le);
             list_push_front(&frame_list,&entry->le);
         }
     }
