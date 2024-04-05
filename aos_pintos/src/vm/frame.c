@@ -1,9 +1,9 @@
-
-
 #include <stdio.h>
 #include "page.h"
 #include "frame.h"
 #include "swap.h"
+#include "threads/synch.h"
+
 static struct hash frame_table;
 static struct list frame_list;
 static struct list frame_table_lock;
@@ -67,7 +67,7 @@ void* frame_get_used_fr(void *upage) {
         if (index == (block_sector_t)-1) {
             return NULL;
         }
-     ASSERT(page_evict_upage(entry->holder, current_frame->upage, index, true));
+     ASSERT(page_evict_upage(entry->holder, entry->upage, index, true));
 
     entry->upage=upage;
     entry->holder=thread_current();
@@ -114,7 +114,7 @@ void frame_free_fr(void *frame) {
     lock_acquire(&frame_table_lock);
     struct frame_table_entry *entry=frame_find_entry(frame);
     hash_delete (&frame_table,&entry->he);
-    list_remove (&frame_list,&entry->le);
+    list_remove (&entry->le);
     palloc_free_page(frame);
     free(entry);
     lock_release(&frame_table_lock);

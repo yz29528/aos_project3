@@ -2,6 +2,7 @@
 #include "page.h"
 #include "frame.h"
 #include "swap.h"
+#include "threads/synch.h"
 #define PAGE_PAL_FLAG			0
 #define POINTER_SIZE		32
 #define PAGE_STACK_SIZE			0x800000

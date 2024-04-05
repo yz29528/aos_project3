@@ -4,12 +4,15 @@
 
 #ifndef VM_SWAP_H
 #define VM_SWAP_H
+#include "devices/block.h"
+#include "lib/kernel/list.h"
+#include "lib/kernel/hash.h"
 
 struct swap_slot{
     block_sector_t offset;
-//    struct hash_elem hash_elem;
     struct list_elem le;
 };
+
 //initialize swap when kernel starts
 //used in thread/init.c
 void swap_init();

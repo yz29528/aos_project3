@@ -4,6 +4,10 @@
 
 #ifndef VM_PAGE_H
 #define VM_PAGE_H
+
+#include "devices/block.h"
+#include "lib/kernel/list.h"
+#include "lib/kernel/hash.h"
 enum page_status {
     FRAME,
     SWAP
@@ -25,17 +29,6 @@ struct page_table_entry* page_find(struct hash *page_table, void *upage);
 
 void page_destroy(struct hash *page_table);
 bool page_page_fault_handler(const void *vaddr, bool to_write, void *esp);
-
-
-
-
-
-
-
-
-
-
-
 
 
 #endif

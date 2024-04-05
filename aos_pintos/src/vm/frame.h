@@ -1,7 +1,9 @@
-
-
 #ifndef VM_FRAME_H
 #define VM_FRAME_H
+
+#include "devices/block.h"
+#include "lib/kernel/list.h"
+#include "lib/kernel/hash.h"
 
 struct frame_table_entry{
     void *frame;
