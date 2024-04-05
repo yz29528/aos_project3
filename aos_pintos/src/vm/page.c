@@ -13,14 +13,16 @@
 #define PAGE_PAL_FLAG			0
 #define POINTER_SIZE		32
 #define PAGE_STACK_SIZE			0x800000
-#define PAGE_STACK_UNDERLINE	(PHYS_BASE - PAGE_STACK_SIZE)
+#define PAGE_STACK_UNDERLINE	((uint32_t)PHYS_BASE - (uint32_t)PAGE_STACK_SIZE)
 
 static struct lock page_table_lock;
 bool page_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 unsigned page_hash(const struct hash_elem *e, void* aux UNUSED);
 struct page_table_entry* page_find(struct hash *page_table, void *upage);
+void page_table_destructor(struct hash_elem *e, void *aux UNUSED);
 
-bool page_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+
+        bool page_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
     return hash_entry(a, struct page_table_entry, he)->key < hash_entry(b, struct page_table_entry, he)->key;
 }
 
@@ -35,8 +37,8 @@ struct page_table_entry* page_find(struct hash *page_table, void *upage) {
     struct page_table_entry tmp_entry;
 
     ASSERT(page_table != NULL);
-    tmp_entry.upage = upage;
-    e = hash_find(&page_table, &(tmp_entry.he));
+    tmp_entry.key = upage;
+    e = hash_find(page_table, &(tmp_entry.he));
     return e!=NULL?hash_entry(e,struct page_table_entry,he):NULL;
 }
 
@@ -49,10 +51,10 @@ struct hash* page_create_table() {
 
 void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     struct page_table_entry *entry = hash_entry(e, struct page_table_entry, he);
-    if(entry->page_status==FRAME){
+    if(entry->status==FRAME){
         //todo
         frame_free_fr((void*)entry->val);
-    }else if(entry->page_status==SWAP){
+    }else if(entry->status==SWAP){
         uint32_t index=entry->val;
         swap_free_swap_slot(index);
     }
@@ -64,7 +66,7 @@ void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
 
 
 
-boolean page_evict_upage(struct thread *holder, void *upage, uint32_t index){
+bool page_evict_upage(struct thread *holder, void *upage, uint32_t index){
     struct hash_elem* e = page_find(holder->page_table, upage);
     ASSERT(e!=NULL);
 
@@ -72,7 +74,7 @@ boolean page_evict_upage(struct thread *holder, void *upage, uint32_t index){
     if(entry == NULL || entry->status != FRAME) {
         return false;
     }
-    entry->value = index;
+    entry->val = index;
     entry->status = SWAP;
     pagedir_clear_page(holder->pagedir, upage);
     return true;
@@ -98,16 +100,16 @@ bool page_set_frame(void *upage, void *kpage, bool writable) {
     uint32_t *pagedir = cur->pagedir;
 
     lock_acquire(&page_table_lock);
-    struct page_table_entry* entry = page_find(&page_table, upage);
+    struct page_table_entry* entry = page_find(page_table, upage);
     if(entry == NULL) {
         entry = malloc(sizeof(struct page_table_entry));
-        entry->upage = upage;
+        entry->key = upage;
         entry->val = (uint32_t)kpage;
         entry->status = FRAME;
         entry->writable = writable;
         hash_insert(page_table, &entry->he);
 
-        ASSERT(pagedir_set_page(pagedir, entry->upage, entry->val, entry->writable));
+        ASSERT(pagedir_set_page(pagedir, entry->key, (void*)entry->val, entry->writable));
         lock_release(&page_table_lock);
         return true;
     }
@@ -117,7 +119,7 @@ bool page_set_frame(void *upage, void *kpage, bool writable) {
 
 
 // todo
-bool page_fault_handler(const void *vaddr, bool to_write, void *esp) {
+bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
 
     struct thread *cur = thread_current();
     struct hash* page_table = cur->page_table;
@@ -132,37 +134,37 @@ bool page_fault_handler(const void *vaddr, bool to_write, void *esp) {
 
     void *dest = NULL;
 
-    if(upage >= PAGE_STACK_UNDERLINE) {
-        if(vaddr >= (unsigned int)(esp) - POINTER_SIZE) {
+    if(upage >= (void*)PAGE_STACK_UNDERLINE) {
+        if(vaddr >= (void*)((unsigned int)(esp) - POINTER_SIZE)) {
             if(entry == NULL) {
-                dest = frame_get_frame(PAGE_PAL_FLAG, upage);
+                dest = frame_get_fr(PAGE_PAL_FLAG, upage);
                 // if get a frame from user pool
                 if(dest != NULL) {
-                    entry = malloc(sizeof(page_table_entry));
-                    entry->upage = upage;
-                    entry->val = dest;
+                    entry = malloc(sizeof(struct page_table_entry));
+                    entry->key = upage;
+                    entry->val = (uint32_t)dest;
                     entry->status = FRAME;
                     entry->writable = true;
                     hash_insert(page_table, &entry->he);
                     success=true;
                 }
             }else if(entry->status==SWAP) {
-                dest = frame_get_frame(PAGE_PAL_FLAG, upage);
+                dest = frame_get_fr(PAGE_PAL_FLAG, upage);
                 if(dest != NULL) {
-                    swap_load((index_t) t->val, dest);
-                    t->val = dest;
-                    t->status = FRAME;
+                    swap_load( entry->val, dest);
+                    entry->val =(uint32_t) dest;
+                    entry->status = FRAME;
                     success=true;
                 }
             }
         }
     }else if(entry!=NULL && entry->status!=FRAME){
         //todo grown stack
-        dest = frame_get_frame(PAGE_PAL_FLAG, upage);
+        dest = frame_get_fr(PAGE_PAL_FLAG, upage);
         if (dest != NULL) {
             if(entry->status == SWAP) {
-                swap_load((index_t) t->value, dest);
-                entry->value = dest;
+                swap_load(entry->val, dest);
+                entry->val = (uint32_t)dest;
                 entry->status = FRAME;
                 success=true;
             }
@@ -174,7 +176,7 @@ bool page_fault_handler(const void *vaddr, bool to_write, void *esp) {
    UPAGE to the physical frame identified by kernel virtual
    address KPAGE.*/
     if(success) {
-        pagedir_set_page (pagedir, upage, kpage,writable);
+        pagedir_set_page (pagedir, upage, dest,writable);
     }
     lock_release(&page_table_lock);
     return success;

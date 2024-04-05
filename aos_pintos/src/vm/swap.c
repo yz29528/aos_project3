@@ -2,12 +2,14 @@
 #include "page.h"
 #include "frame.h"
 #include "swap.h"
+#include "threads/malloc.h"
+#include "threads/vaddr.h"
 // Created by zhangyifan on 2024/4/2.
 //store the empty swap slot. reuse them later.
 static struct list swap_slot_list;
 struct block* swap_block;
 block_sector_t max_index = 0;
-const int sector_per_page=PGSIZE / BLOCK_SECTOR_SIZE;
+const int sector_per_page= PGSIZE / BLOCK_SECTOR_SIZE;
 
 void swap_init(){
     swap_block = block_get_role(BLOCK_SWAP);
@@ -24,7 +26,7 @@ block_sector_t swap_store(void *kpage) {
         return -1;
     }
     for(int i=0;i<sector_per_page;i++){
-        block_write(swap_block,index+i,kpage+i*BLOCK_SECTOR_SIZE);
+        block_write(swap_block,index+i,(void*)((uint32_t)kpage+i*BLOCK_SECTOR_SIZE));
     }
     return index;
 }
@@ -34,9 +36,8 @@ block_sector_t swap_store(void *kpage) {
 void swap_load(block_sector_t index, void *kpage) {
     ASSERT(is_kernel_vaddr(kpage));
     ASSERT((int)index>=0 && index % sector_per_page == 0);
-    block_sector_t index=swap_get_swap_slot();
     for(int i=0;i<sector_per_page;i++){
-        block_read(swap_block,index+i,kpage+i*BLOCK_SECTOR_SIZE);
+        block_read(swap_block,index+i,(void*)((uint32_t)kpage+i*BLOCK_SECTOR_SIZE));
     }
     swap_free_swap_slot(index);
 }
@@ -56,9 +57,9 @@ void swap_free_swap_slot(block_sector_t index){
 
 block_sector_t swap_get_swap_slot(){
     if (!list_empty(&swap_slot_list)){
-        struct swap_item* slot = list_entry(list_pop_front(&swap_slot_list), struct swap_slot, le);
-        int index=t;
-        free(t);
+        struct swap_slot* slot = list_entry(list_pop_front(&swap_slot_list), struct swap_slot, le);
+        int index=slot->index;
+        free(slot);
         return index;
     }else{
         if (max_index + sector_per_page < block_size(swap_block)){

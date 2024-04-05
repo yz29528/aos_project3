@@ -103,8 +103,11 @@ struct thread
   bool success; // Was exec successful 
 
   struct file** fd_table; // Map fd (index) to files
-
+#ifdef VM
+    /* Owned by userprog/process.c. */
   struct hash* page_table;
+#endif
+
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t *pagedir; /* Page directory. */

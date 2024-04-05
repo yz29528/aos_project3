@@ -14,7 +14,7 @@ struct frame_table_entry{
 };
 
 void *frame_find_fr(void *frame);
-
+void frame_lift_fr();
 //init frame_table
 //used in thread/init.c
 void  frame_init();

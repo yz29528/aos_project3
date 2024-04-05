@@ -9,7 +9,7 @@
 #include "lib/kernel/hash.h"
 
 struct swap_slot{
-    block_sector_t offset;
+    block_sector_t index;
     struct list_elem le;
 };
 
@@ -26,7 +26,6 @@ block_sector_t swap_store(void *kpage);
 void swap_load(block_sector_t index, void *kpage);
 
 void swap_free_swap_slot(block_sector_t index);
-
 block_sector_t swap_get_swap_slot();
 
 

@@ -5,7 +5,6 @@
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "threads/malloc.h"
-#include "threads/palloc.h"
 #include "lib/debug.h"
 #include "lib/string.h"
 #include "lib/stddef.h"
@@ -15,6 +14,7 @@ static struct list frame_list;
 static struct lock frame_table_lock;
 static unsigned frame_hash(const struct hash_elem *e, void* aux UNUSED);
 static bool frame_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+struct frame_table_entry* frame_create_frame_table_entry(void* upage,void* frame);
 
 static bool frame_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
     struct frame_table_entry* fa = hash_entry(a,  struct frame_table_entry, he);
@@ -49,13 +49,13 @@ struct frame_table_entry* frame_find_entry(void *frame) {
 }
 
 // call it in timer to approximate LRU.
-void frame_lift_fr(void *frame) {
+void frame_lift_fr() {
     struct frame_table_entry *entry;
     for (struct list_elem* e = list_rbegin(&frame_list); e != list_rend(&frame_list); e = list_prev(e)){
         entry= list_entry(e, struct frame_table_entry, le);
         if(pagedir_is_accessed(entry->holder->pagedir, entry->upage)){
             pagedir_set_accessed(entry->holder->pagedir, entry->upage, false);
-            list_remove(&entry->le)
+            list_remove(&entry->le);
             list_push_front(&frame_list,&entry->le);
             break;
         }
@@ -72,11 +72,11 @@ void* frame_get_used_fr(void *upage) {
         if (index == (block_sector_t)-1) {
             return NULL;
         }
-    ASSERT(page_evict_upage(entry->holder, entry->upage, index, true));
+    ASSERT(page_evict_upage(entry->holder, entry->upage, index));
     entry->upage=upage;
     entry->holder=thread_current();
-    list_remove(&e);
-    list_push_front(&frame_list,&e);
+    list_remove(e);
+    list_push_front(&frame_list,e);
     return entry;
 }
 //get a frame from user pool, which must be mapped from upage
