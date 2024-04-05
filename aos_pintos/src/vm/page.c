@@ -50,11 +50,12 @@ struct hash* page_create_table() {
     return page_table;
 }
 
+/* Second, the kernel consults the supplemental page table
+ when a process terminates, to decide what resources to free. */
 
 void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     struct page_table_entry *entry = hash_entry(e, struct page_table_entry, he);
     if(entry->status==FRAME){
-        //todo
         frame_free_fr((void*)entry->val);
     }else if(entry->status==SWAP){
         uint32_t index=entry->val;
@@ -83,7 +84,7 @@ bool page_evict_upage(struct thread *holder, void *upage, uint32_t index){
 }
 
 // called in thread_exit?
-void page_destroy(struct hash* page_table) {
+void page_destroy_table(struct hash* page_table) {
     lock_acquire(&page_table_lock);
     hash_destroy(page_table, page_table_destructor);
     lock_release(&page_table_lock);

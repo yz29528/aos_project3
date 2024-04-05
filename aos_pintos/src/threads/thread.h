@@ -106,6 +106,7 @@ struct thread
   struct file** fd_table; // Map fd (index) to files
 #ifdef VM
   struct hash* page_table;
+  void *esp;
 #endif
 
 #ifdef USERPROG
