@@ -21,8 +21,10 @@ unsigned page_hash(const struct hash_elem *e, void* aux UNUSED);
 struct page_table_entry* page_find(struct hash *page_table, void *upage);
 void page_table_destructor(struct hash_elem *e, void *aux UNUSED);
 
-
-        bool page_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+void page_init() {
+    lock_init(&page_table_lock);
+}
+bool page_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
     return hash_entry(a, struct page_table_entry, he)->key < hash_entry(b, struct page_table_entry, he)->key;
 }
 

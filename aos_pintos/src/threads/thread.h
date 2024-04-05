@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 #include "threads/synch.h"
 
@@ -104,7 +105,6 @@ struct thread
 
   struct file** fd_table; // Map fd (index) to files
 #ifdef VM
-    /* Owned by userprog/process.c. */
   struct hash* page_table;
 #endif
 
