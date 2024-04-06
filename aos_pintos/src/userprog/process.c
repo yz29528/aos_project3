@@ -145,6 +145,7 @@ void process_exit (void)
   // Destory the page owned by thread
   page_destroy_table(cur->page_table);
   #endif
+
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -222,7 +223,7 @@ bool load (const char *args, void (**eip) (void), void **esp)
 #ifdef VM
     /* Allocate an page table. */
   t->page_table = page_create_table();
-  if (t->pagedir == NULL)
+  if (t->page_table == NULL)
     goto done;
 #endif
   /* Allocate and activate page directory. */
@@ -414,11 +415,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-#ifdef VM
-          frame_free_fr(kpage);
-#else
           palloc_free_page (kpage);
-#endif
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -426,11 +423,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable))
         {
-#ifdef VM
-          frame_free_fr(kpage);
-#else
           palloc_free_page (kpage);
-#endif
           return false;
         }
 

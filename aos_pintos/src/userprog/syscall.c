@@ -21,6 +21,8 @@
 #include "threads/flags.h"
 #include "devices/input.h"
 #include "devices/block.h"
+#include "vm/page.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
 static bool valid_ptr (void *);
@@ -52,6 +54,11 @@ static int check_args (void *esp, int num_args)
 
 static void syscall_handler (struct intr_frame *f UNUSED)
 {
+
+#ifdef VM
+  thread_current ()->esp = f->esp;
+#endif
+
   if (!valid_ptr (f->esp))
     {
       exit (-1);
@@ -458,6 +465,18 @@ int symlink (char *target, char *linkpath)
 
 bool valid_ptr (void *ptr)
 {
-  return ptr && !is_kernel_vaddr (ptr) &&
-         pagedir_get_page (thread_current ()->pagedir, ptr);
+    if( ptr == NULL || is_kernel_vaddr (ptr)){
+        return false;
+    }
+
+#ifdef VM
+    struct page_table_entry* entry = page_find(thread_current()->page_table, pg_round_down(ptr));
+  if (entry == NULL){
+    return page_fault_handler(ptr, true, thread_current()->esp);
+  }
+    return true;
+#else
+    return pagedir_get_page (thread_current ()->pagedir, ptr);
+#endif
+
 }

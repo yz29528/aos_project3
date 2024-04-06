@@ -56,11 +56,18 @@ struct hash* page_create_table() {
 
 void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     struct page_table_entry *entry = hash_entry(e, struct page_table_entry, he);
-    if(entry->status==FRAME){
-        frame_free_fr((void*)entry->val);
-    }else if(entry->status==SWAP){
+    ASSERT(entry->val!=NULL);
+    if(entry->status==SWAP){
         uint32_t index=entry->val;
-        swap_free_swap_slot(index);
+        if(index!=-1) {
+            swap_free_swap_slot(index);
+        }
+    }
+    else if(entry->status==FRAME){
+        pagedir_clear_page(thread_current()->pagedir, entry->key);
+        void* kpage=(void*)entry->val;
+        if(kpage!=NULL)
+        frame_free_fr(kpage);
     }
     free(entry);
 }
@@ -102,7 +109,7 @@ bool page_set_frame(void *upage, void *kpage, bool writable) {
     struct thread *cur = thread_current();
     struct hash* page_table = cur->page_table;
     uint32_t *pagedir = cur->pagedir;
-
+    ASSERT(kpage!=NULL)
     lock_acquire(&page_table_lock);
     struct page_table_entry* entry = page_find(page_table, upage);
     if(entry == NULL) {
@@ -111,6 +118,7 @@ bool page_set_frame(void *upage, void *kpage, bool writable) {
         entry->val = (uint32_t)kpage;
         entry->status = FRAME;
         entry->writable = writable;
+        //printf("thread %s try to insert a kpage to page table:%x  and upage is:%x\n",cur->name,kpage,upage);
         hash_insert(page_table, &entry->he);
 
         ASSERT(pagedir_set_page(pagedir, entry->key, (void*)entry->val, entry->writable));
@@ -148,7 +156,7 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
                     entry->key = upage;
                     entry->val = (uint32_t)kpage;
                     entry->status = FRAME;
-                    entry->writable = true;
+                    entry->writable = writable;
                     hash_insert(page_table, &entry->he);
                     success=true;
                 }

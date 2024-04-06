@@ -97,16 +97,21 @@ void* frame_get_fr(enum palloc_flags flag, void *upage) {
             memset (frame, 0, PGSIZE);
         }
         entry=frame_create_frame_table_entry(upage,frame);
+        ASSERT(entry!=NULL && entry->frame!=NULL);
+       //printf("thread %s insert a entry usage: %x  frame:%x\n",thread_current()->name,upage,frame);
         list_push_front(&frame_list,&entry->le);
         hash_insert(&frame_table, &entry->he);
-    }else{
+        lock_release(&frame_table_lock);
+        //printf("get a frame from palloc:%x\n",frame);
+        return frame;
+    }
+    //PANIC("run out of user pool and !");
         frame=frame_get_used_fr(upage);
         if (frame != NULL){
             list_remove(&entry->le);
             list_push_front(&frame_list,&entry->le);
         }
-    }
-       // PANIC("run out of user pool and !");
+       //
     lock_release(&frame_table_lock);
     return frame;
 }
@@ -116,9 +121,15 @@ void frame_free_fr(void *frame) {
     ASSERT (pg_ofs (frame) == 0);
     lock_acquire(&frame_table_lock);
     struct frame_table_entry *entry=frame_find_entry(frame);
-    hash_delete (&frame_table,&entry->he);
-    list_remove (&entry->le);
-    palloc_free_page(frame);
-    free(entry);
+    //ASSERT(entry->frame!=NULL);// IMPORTANT
+    //printf("thread %s try to delete a frame:%x\n",thread_current()->name,frame);
+    if (entry != NULL) {
+        if (entry->frame == NULL)
+            PANIC("try_free_a frame_that_not_exist!!");
+        hash_delete(&frame_table, &entry->he);
+        list_remove(&entry->le);
+        palloc_free_page(frame);
+        free(entry);
+    }
     lock_release(&frame_table_lock);
 }
