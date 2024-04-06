@@ -344,18 +344,18 @@ int read (int fd, void *buffer, unsigned size)
     {
       exit (-1);
     }
-  
-  // check if page is writeable
-  struct page_table_entry* entry = page_find(thread_current()->page_table, buffer);
-  if ((entry == NULL)|!(entry->writable)){
-    exit(-1);
-  }
 
   struct file *file = thread_current ()->fd_table[fd];
   if (file == NULL)
     {
       return 0;
     }
+
+  // check if page exists however is not writeable. For project 2 tests, entry will be NULL
+  struct page_table_entry* entry = page_find(thread_current()->page_table, pg_round_down(buffer));
+  if ((entry != NULL) && !(entry->writable)){
+    exit(-1);
+  }
   unsigned bytes_read = 0;
 
   // Read from stdin
