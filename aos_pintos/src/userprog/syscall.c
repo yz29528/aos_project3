@@ -344,6 +344,12 @@ int read (int fd, void *buffer, unsigned size)
     {
       exit (-1);
     }
+  
+  // check if page is writeable
+  struct page_table_entry* entry = page_find(thread_current()->page_table, buffer);
+  if ((entry == NULL)|!(entry->writable)){
+    exit(-1);
+  }
 
   struct file *file = thread_current ()->fd_table[fd];
   if (file == NULL)
