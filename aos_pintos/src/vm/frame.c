@@ -49,7 +49,10 @@ struct frame_table_entry* frame_find_entry(void *frame) {
 }
 
 // call it in timer to approximate LRU.
-void frame_lift_fr() {
+void frame_lift_fr(bool execute) {
+    if(!execute){
+        return;
+    }
     struct frame_table_entry *entry;
     for (struct list_elem* e = list_rbegin(&frame_list); e != list_rend(&frame_list); e = list_prev(e)){
         entry= list_entry(e, struct frame_table_entry, le);
