@@ -20,7 +20,7 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
-/* Number of loops per timer tick.
+/* Number of loops perR timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 

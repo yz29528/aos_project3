@@ -56,7 +56,6 @@ struct hash* page_create_table() {
 
 void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
     struct page_table_entry *entry = hash_entry(e, struct page_table_entry, he);
-    ASSERT(entry->val!=NULL);
     if(entry->status==SWAP){
         uint32_t index=entry->val;
         if(index!=-1) {
@@ -78,10 +77,7 @@ void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
 
 
 bool page_evict_upage(struct thread *holder, void *upage, uint32_t index){
-    struct hash_elem* e = page_find(holder->page_table, upage);
-    ASSERT(e!=NULL);
-
-    struct page_table_entry *entry =  hash_entry(e,struct page_table_entry, he);
+    struct page_table_entry* entry= page_find(holder->page_table, upage);
     if(entry == NULL || entry->status != FRAME) {
         return false;
     }

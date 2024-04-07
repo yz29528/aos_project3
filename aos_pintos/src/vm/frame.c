@@ -65,7 +65,7 @@ void frame_lift_fr(bool execute) {
     }
 }
 
-void* frame_get_used_fr(void *upage) {
+struct frame_table_entry* frame_get_used_fr(void *upage) {
 
     struct list_elem* e =list_pop_back(&frame_list);
     ASSERT(e!=NULL);
@@ -109,14 +109,14 @@ void* frame_get_fr(enum palloc_flags flag, void *upage) {
         return frame;
     }
     //PANIC("run out of user pool and !");
-        frame=frame_get_used_fr(upage);
-        if (frame != NULL){
+    entry=frame_get_used_fr(upage);
+        if (entry != NULL){
             list_remove(&entry->le);
             list_push_front(&frame_list,&entry->le);
         }
        //
     lock_release(&frame_table_lock);
-    return frame;
+    return entry->frame;
 }
 
 //free a frame that got from frame_get_frame
