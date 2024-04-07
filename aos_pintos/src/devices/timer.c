@@ -139,7 +139,7 @@ static void timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-    frame_lift_fr(timer_ticks() %TIMER_FREQ==0);
+  frame_lift_fr(timer_ticks() %(TIMER_FREQ)==0);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

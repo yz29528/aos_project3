@@ -350,14 +350,13 @@ int read (int fd, void *buffer, unsigned size)
     {
       return 0;
     }
-  #ifndef VM
 
   // check if page exists however is not writeable. For project 2 tests, entry will be NULL
   struct page_table_entry* entry = page_find(thread_current()->page_table, pg_round_down(buffer));
   if ((entry != NULL) && !(entry->writable)){
     exit(-1);
   }
-  #endif
+
   unsigned bytes_read = 0;
 
   // Read from stdin
