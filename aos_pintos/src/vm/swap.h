@@ -8,25 +8,30 @@
 #include "lib/kernel/list.h"
 #include "lib/kernel/hash.h"
 
-struct swap_slot{
-    block_sector_t index;
-    struct list_elem le;
-};
 
-//initialize swap when kernel starts
-//used in thread/init.c
-void swap_init();
+/* Functions for Swap Table manipulation. */
 
-//store the content of a kpage(frame) to a swap slot(on the disk)
-//return an identifier of the swap slot
-block_sector_t swap_store(void *kpage);
+/**
+ * Initialize the swap. Must be called ONLY ONCE at the initializtion phase.
+ */
+void swap_init (void);
 
-//load a swap slot to the kpage(frame)
-//index must be got from swap_store()
-void swap_load(block_sector_t index, void *kpage);
+/**
+ * Write the content of `page` into the swap disk,
+ * and return the index of swap region in which it is placed.
+ */
+block_sector_t swap_out(void *page);
 
-void swap_free_swap_slot(block_sector_t index);
-block_sector_t swap_get_swap_slot();
+/**
+ * Read the content of from the specified swap index,
+ * from the mapped swap block, and store PGSIZE bytes into `page`.
+ */
+void swap_in(block_sector_t swap_index, void *page);
+
+/**
+ * Drop the swap region.
+ */
+void swap_free(block_sector_t swap_index);
 
 
 #endif //AOS_PROJECT3_SWAP_H

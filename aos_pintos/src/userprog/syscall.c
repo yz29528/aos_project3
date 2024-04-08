@@ -370,9 +370,17 @@ int read (int fd, void *buffer, unsigned size)
     }
   else // Read from file
     {
+      #ifdef VM
+      preload_and_pin_pages(buffer, size);
+      #endif
+
       sema_down (&filesys_mutex);
       bytes_read = file_read (file, buffer, size);
       sema_up (&filesys_mutex);
+
+      #ifdef VM
+      unpin_preloaded_pages(buffer, size);
+      #endif
     }
 
   return bytes_read;
@@ -400,9 +408,18 @@ int write (int fd, const void *buffer, unsigned size)
       return 0;
     }
 
+  #ifdef VM
+  preload_and_pin_pages(buffer, size);
+  #endif
+
   sema_down (&filesys_mutex);
   unsigned bytes_written = file_write (file, buffer, size);
   sema_up (&filesys_mutex);
+
+  #ifdef VM
+  unpin_preloaded_pages(buffer, size);
+  #endif
+
   return bytes_written;
 }
 
@@ -487,3 +504,124 @@ bool valid_ptr (void *ptr)
 #endif
 
 }
+
+void preload_and_pin_pages(const void *buffer, size_t size) {
+  struct hash *page_table = thread_current()->page_table;
+  uint32_t *pagedir = thread_current()->pagedir;
+
+  for(void *upage = pg_round_down(buffer); upage < buffer + size; upage += PGSIZE) {
+    page_table_load_page (page_table, pagedir, upage);
+    pin_page(page_table, upage);
+  }
+}
+
+void unpin_preloaded_pages(const void *buffer, size_t size) {
+  struct hash *page_table = thread_current()->page_table;
+
+  for(void *upage = pg_round_down(buffer); upage < buffer + size; upage += PGSIZE) {
+    unpin_page(page_table, upage);
+  }
+}
+
+// #ifdef VM
+// mmapid_t sys_mmap(int fd, void *upage) {
+//   if (upage == NULL || pg_ofs(upage) != 0) {
+//     return -1;
+//   }
+//   if (fd <= 1) {
+//     return -1; // 0 and 1 are unmappable
+//   }
+//   struct thread *curr = thread_current();
+
+//   lock_acquire(&filesys_lock);
+
+//   /* Open file */
+//   struct file *f = NULL;
+//   struct file_desc* file_d = find_file_desc(thread_current(), fd, FD_FILE);
+//   if (file_d && file_d->file) {
+//     // reopen file so that it doesn't interfere with process itself
+//     // it will be store in the mmap_desc struct (later closed on munmap)
+//     f = file_reopen(file_d->file);
+//   }
+
+//   if (f == NULL) {
+//     goto MMAP_FAIL;
+//   }
+
+//   size_t file_size = file_length(f);
+//   if (file_size == 0) {
+//     goto MMAP_FAIL;
+//   }
+
+//   /* Mapping memory pages */
+//   // First, ensure that all the page address is NON-EXISTENT.
+//   for (size_t offset = 0; offset < file_size; offset += PGSIZE) {
+//     void *addr = upage + offset;
+//     if (vm_supt_has_entry(curr->supt, addr)) {
+//       goto MMAP_FAIL;
+//     }
+//   }
+
+//   // Now, map each page to filesystem
+//   for (size_t offset = 0; offset < file_size; offset += PGSIZE) {
+//     void *addr = upage + offset;
+
+//     size_t read_bytes = (offset + PGSIZE < file_size ? PGSIZE : file_size - offset);
+//     size_t zero_bytes = PGSIZE - read_bytes;
+
+//     vm_supt_install_filesys(curr->supt, addr,
+//         f, offset, read_bytes, zero_bytes, /*writable*/true);
+//   }
+
+//   /* Assign mmapid */
+//   mmapid_t mid;
+//   if (!list_empty(&curr->mmap_list)) {
+//     mid = list_entry(list_back(&curr->mmap_list), struct mmap_desc, elem)->id + 1;
+//   }
+//   else mid = 1;
+
+//   struct mmap_desc *mmap_d = (struct mmap_desc*) malloc(sizeof(struct mmap_desc));
+//   mmap_d->id = mid;
+//   mmap_d->file = f;
+//   mmap_d->addr = upage;
+//   mmap_d->size = file_size;
+//   list_push_back (&curr->mmap_list, &mmap_d->elem);
+
+//   // OK, release and return the mid
+//   lock_release (&filesys_lock);
+//   return mid;
+
+// MMAP_FAIL:
+//   // finally: release and return
+//   lock_release(&filesys_lock);
+//   return -1;
+// }
+
+// bool sys_munmap(mmapid_t mid) {
+//   struct thread *curr = thread_current();
+//   struct mmap_desc *mmap_d = find_mmap_desc(curr, mid);
+
+//   if (mmap_d == NULL) { // not found such mid
+//     return false; // or fail_invalid_access() ?
+//   }
+
+//   lock_acquire(&filesys_lock);
+//   {
+//     // Iterate through each page
+//     size_t offset, file_size = mmap_d->size;
+//     for(offset = 0; offset < file_size; offset += PGSIZE) {
+//       void *addr = mmap_d->addr + offset;
+//       size_t bytes = (offset + PGSIZE < file_size ? PGSIZE : file_size - offset);
+//       vm_supt_mm_unmap(curr->supt, curr->pagedir, addr, mmap_d->file, offset, bytes);
+//     }
+
+//     // Free resources, and remove from the list
+//     list_remove(& mmap_d->elem);
+//     file_close(mmap_d->file);
+//     free(mmap_d);
+//   }
+//   lock_release (&filesys_lock);
+
+//   return true;
+// }
+// #endif

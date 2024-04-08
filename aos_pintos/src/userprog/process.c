@@ -139,11 +139,10 @@ void process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-
-
   #ifdef VM
   // Destory the page owned by thread
   page_destroy_table(cur->page_table);
+  cur->page_table = NULL;
   #endif
 
     /* Destroy the current process's page directory and switch back
@@ -194,7 +193,7 @@ void process_activate (void)
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
-static bool setup_stack (void **esp, const char *filename);
+static bool setup_stack(void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -314,7 +313,7 @@ bool load (const char *args, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, args))
+  if (!setup_stack (esp))
     goto done;
 
   /* Start address. */
@@ -407,38 +406,57 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-#ifdef VM
-      uint8_t *kpage = frame_get_fr (PAL_USER,upage);
-#else
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-#endif
-
-      if (kpage == NULL)
+      #ifndef VM
+      uint8_t *kpage = frame_allocate(PAL_USER, upage);
+      if (kpage == NULL) {
         return false;
+      }
 
       /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-#ifdef VM
-          frame_free_fr (kpage);
-#else
-          palloc_free_page (kpage);
-#endif
-          return false;
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
+        frame_free(kpage);
+        return false;
+      }
+      memset(kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable))
-        {
-#ifdef VM
-          frame_free_fr (kpage);
-#else
-          palloc_free_page (kpage);
-#endif
-          return false;
-        }
+      if (!install_page(upage, kpage, writable)) {
+        frame_free(kpage);
+        return false;
+      }
+      #endif
+
+      /* Get a page of memory. */
+// #ifdef VM
+//       uint8_t *kpage = frame_get_fr (PAL_USER,upage);
+// #else
+//       uint8_t *kpage = palloc_get_page (PAL_USER);
+// #endif
+
+//       if (kpage == NULL)
+//         return false;
+
+//       /* Load this page. */
+//       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+//         {
+// #ifdef VM
+//           frame_free_fr (kpage);
+// #else
+//           palloc_free_page (kpage);
+// #endif
+//           return false;
+//         }
+//       memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+//       /* Add the page to the process's address space. */
+//       if (!install_page (upage, kpage, writable))
+//         {
+// #ifdef VM
+//           frame_free_fr (kpage);
+// #else
+//           palloc_free_page (kpage);
+// #endif
+//           return false;
+//         }
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -464,104 +482,138 @@ static bool decrement_stack (char **char_esp, void *stackpg, char **tokens,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool setup_stack (void **esp, const char *filename)
-{
+// static bool setup_stack (void **esp, const char *filename)
+// {
+//   uint8_t *kpage;
+//   bool success = false;
+
+//   char *file_name = (char *) filename;
+
+//   char **tokens = palloc_get_page (0);
+//   if (tokens == NULL)
+//     return false;
+//   char *save_ptr;
+//   const char delimiter[7] = " \t\r\n\f\v";
+//   tokens[0] = strtok_r (file_name, delimiter, &save_ptr);
+//   int argc = 0;
+//   while (tokens[argc])
+//     {
+//       argc++;
+//       if (argc > 128)
+//         {
+//           return false;
+//         }
+//       tokens[argc] = strtok_r (NULL, delimiter, &save_ptr);
+//     }
+// #ifdef VM
+//     /*  get kpage from frame table */
+//     // kpage = frame_allocate(PAL_USER | PAL_ZERO, PHYS_BASE - PGSIZE);
+//   kpage = frame_get_fr(PAL_USER | PAL_ZERO, (void*)(((uint8_t *) PHYS_BASE) - PGSIZE));
+// #else
+//   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+// #endif
+
+//   if (kpage != NULL)
+//     {
+//       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+//       if (success)
+//         {
+//           *esp = PHYS_BASE;
+//           char *char_esp = (char *) *esp;
+//           int i = argc - 1;
+//           while (i >= 0)
+//             {
+//               int len = strlen (tokens[i]) + 1;
+//               if (!decrement_stack (&char_esp, kpage, tokens, len))
+//                 {
+//                   return false;
+//                 }
+//               memcpy (char_esp, tokens[i], len);
+//               i--;
+//             }
+
+//           char_esp = ALIGN (char_esp); // align down to nearest multiple of 4
+
+//           if (!decrement_stack (&char_esp, kpage, tokens, 4))
+//             {
+//               return false;
+//             }
+//           int *arg_end = (int *) char_esp;
+//           *arg_end = 0;
+
+//           i = argc - 1;
+//           char *top = *esp;
+//           while (i >= 0)
+//             {
+//               if (!decrement_stack (&char_esp, kpage, tokens, 4))
+//                 {
+//                   return false;
+//                 }
+//               top -= strlen (tokens[i]) + 1;
+//               memcpy (char_esp, &top, 4);
+//               i--;
+//             }
+//           char *arg_start = char_esp;
+//           if (!decrement_stack (&char_esp, kpage, tokens, 4))
+//             {
+//               return false;
+//             }
+//           memcpy (char_esp, &arg_start, 4);
+//           if (!decrement_stack (&char_esp, kpage, tokens, 4))
+//             {
+//               return false;
+//             }
+//           memcpy (char_esp, &argc, 4);
+//           if (!decrement_stack (&char_esp, kpage, tokens, 4))
+//             {
+//               return false;
+//             }
+//           *esp = char_esp;
+//           palloc_free_page (tokens);
+//         }
+//       else
+//         {
+//           palloc_free_page (tokens);
+// #ifdef VM
+//           frame_free_fr(kpage);
+// #else
+//           palloc_free_page (kpage);
+// #endif
+//         }
+//     }
+//   return success;
+// }
+
+static bool setup_stack (void **esp) {
   uint8_t *kpage;
   bool success = false;
 
-  char *file_name = (char *) filename;
-
-  char **tokens = palloc_get_page (0);
-  if (tokens == NULL)
-    return false;
-  char *save_ptr;
-  const char delimiter[7] = " \t\r\n\f\v";
-  tokens[0] = strtok_r (file_name, delimiter, &save_ptr);
-  int argc = 0;
-  while (tokens[argc])
-    {
-      argc++;
-      if (argc > 128)
-        {
-          return false;
-        }
-      tokens[argc] = strtok_r (NULL, delimiter, &save_ptr);
+  // upage address is the first segment of stack.
+  kpage = frame_allocate(PAL_USER | PAL_ZERO, PHYS_BASE - PGSIZE);
+  if (kpage != NULL) {
+    success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+    if (success) {
+      *esp = PHYS_BASE;
+    } else {
+      frame_free(kpage);
     }
+  }
+  return success;
+}
+
+static bool install_page (void *upage, void *kpage, bool writable) {
+  struct thread *t = thread_current ();
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  bool success = (pagedir_get_page (t->pagedir, upage) == NULL);
+  success = success && pagedir_set_page (t->pagedir, upage, kpage, writable);
 #ifdef VM
-    /*  get kpage from frame table */
-  kpage = frame_get_fr(PAL_USER | PAL_ZERO, (void*)(((uint8_t *) PHYS_BASE) - PGSIZE));
-#else
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  success = success && create_framepage(t->page_table, upage, kpage);
+  if (success) {
+    frame_unpin(kpage);
+  }
 #endif
-
-  if (kpage != NULL)
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        {
-          *esp = PHYS_BASE;
-          char *char_esp = (char *) *esp;
-          int i = argc - 1;
-          while (i >= 0)
-            {
-              int len = strlen (tokens[i]) + 1;
-              if (!decrement_stack (&char_esp, kpage, tokens, len))
-                {
-                  return false;
-                }
-              memcpy (char_esp, tokens[i], len);
-              i--;
-            }
-
-          char_esp = ALIGN (char_esp); // align down to nearest multiple of 4
-
-          if (!decrement_stack (&char_esp, kpage, tokens, 4))
-            {
-              return false;
-            }
-          int *arg_end = (int *) char_esp;
-          *arg_end = 0;
-
-          i = argc - 1;
-          char *top = *esp;
-          while (i >= 0)
-            {
-              if (!decrement_stack (&char_esp, kpage, tokens, 4))
-                {
-                  return false;
-                }
-              top -= strlen (tokens[i]) + 1;
-              memcpy (char_esp, &top, 4);
-              i--;
-            }
-          char *arg_start = char_esp;
-          if (!decrement_stack (&char_esp, kpage, tokens, 4))
-            {
-              return false;
-            }
-          memcpy (char_esp, &arg_start, 4);
-          if (!decrement_stack (&char_esp, kpage, tokens, 4))
-            {
-              return false;
-            }
-          memcpy (char_esp, &argc, 4);
-          if (!decrement_stack (&char_esp, kpage, tokens, 4))
-            {
-              return false;
-            }
-          *esp = char_esp;
-          palloc_free_page (tokens);
-        }
-      else
-        {
-          palloc_free_page (tokens);
-#ifdef VM
-          frame_free_fr(kpage);
-#else
-          palloc_free_page (kpage);
-#endif
-        }
-    }
   return success;
 }
 
@@ -574,16 +626,16 @@ static bool setup_stack (void **esp, const char *filename)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool install_page (void *upage, void *kpage, bool writable)
-{
-#ifdef VM
-    return page_set_frame(upage, kpage, writable);
-#else
-  struct thread *t = thread_current ();
+// static bool install_page (void *upage, void *kpage, bool writable)
+// {
+// #ifdef VM
+//     return page_set_frame(upage, kpage, writable);
+// #else
+//   struct thread *t = thread_current ();
 
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL &&
-          pagedir_set_page (t->pagedir, upage, kpage, writable));
-#endif
-}
+//   /* Verify that there's not already a page at that virtual
+//      address, then map our page there. */
+//   return (pagedir_get_page (t->pagedir, upage) == NULL &&
+//           pagedir_set_page (t->pagedir, upage, kpage, writable));
+// #endif
+// }
