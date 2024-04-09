@@ -143,6 +143,9 @@ void process_exit (void)
 
   #ifdef VM
   // Destory the page owned by thread
+  if(cur->exec_file!=NULL){
+    file_close(cur->exec_file);
+  }
   page_destroy_table(cur->page_table);
   #endif
 
@@ -234,11 +237,15 @@ bool load (const char *args, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (filename);
+
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", filename);
       goto done;
     }
+#ifdef VM
+  t->exec_file=file;
+#endif
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -324,7 +331,12 @@ bool load (const char *args, void (**eip) (void), void **esp)
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+#ifdef VM
+
+#else
+    file_close (file);
+#endif
+
   return success;
 }
 
@@ -397,7 +409,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
-
+#ifdef VM
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0)
     {
@@ -407,12 +419,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-#ifdef VM
       uint8_t *kpage = frame_get_fr (PAL_USER,upage);
-#else
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-#endif
 
       if (kpage == NULL)
         return false;
@@ -420,11 +427,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-#ifdef VM
           frame_free_fr (kpage);
-#else
-          palloc_free_page (kpage);
-#endif
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -432,11 +435,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable))
         {
-#ifdef VM
           frame_free_fr (kpage);
-#else
-          palloc_free_page (kpage);
-#endif
           return false;
         }
 
@@ -445,6 +444,42 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+#else
+    file_seek (file, ofs);
+    while (read_bytes > 0 || zero_bytes > 0)
+    {
+        /* Calculate how to fill this page.
+           We will read PAGE_READ_BYTES bytes from FILE
+           and zero the final PAGE_ZERO_BYTES bytes. */
+        size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+        /* Get a page of memory. */
+        uint8_t *kpage = palloc_get_page (PAL_USER);
+
+        if (kpage == NULL)
+            return false;
+
+        /* Load this page. */
+        if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+        {
+            palloc_free_page (kpage);
+            return false;
+        }
+        memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+        /* Add the page to the process's address space. */
+        if (!install_page (upage, kpage, writable))
+        {
+            palloc_free_page (kpage);
+            return false;
+        }
+        /* Advance. */
+        read_bytes -= page_read_bytes;
+        zero_bytes -= page_zero_bytes;
+        upage += PGSIZE;
+    }
+#endif
   return true;
 }
 

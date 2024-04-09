@@ -139,32 +139,33 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
 
     struct page_table_entry* entry = page_find(page_table, upage);
 
+    if(writable == true && entry != NULL && entry->writable == false) {
+        return false;
+    }
 
     void *kpage = NULL;
-
-    if(upage >= (void*)PAGE_STACK_UNDERLINE) {
-        if(vaddr >= (void*)((unsigned int)(esp) - POINTER_SIZE)) {
-            if(entry == NULL) {
-                kpage = frame_get_fr(PAL_DEFAULT, upage);
-                // if get a frame from user pool
-                if(kpage != NULL) {
-                    entry = malloc(sizeof(struct page_table_entry));
-                    entry->key = upage;
-                    entry->val = (uint32_t)kpage;
-                    entry->status = FRAME;
-                    entry->writable = writable;
-                    hash_insert(page_table, &entry->he);
-                    success=true;
-                }
-            }else if(entry->status==SWAP) {
-                kpage = frame_get_fr(PAL_DEFAULT, upage);
-                if(kpage != NULL) {
-                    swap_load( entry->val, kpage);
-                    entry->val =(uint32_t) kpage;
-                    entry->status = FRAME;
-                    success=true;
-                }
+    if(entry == NULL) {
+        if(upage >= (void*)PAGE_STACK_UNDERLINE && vaddr >= (void*)((unsigned int)(esp) - POINTER_SIZE)) {
+            kpage = frame_get_fr(PAL_DEFAULT, upage);
+            // if get a frame from user pool
+            if(kpage != NULL) {
+                entry = malloc(sizeof(struct page_table_entry));
+                entry->key = upage;
+                entry->val = (uint32_t)kpage;
+                entry->status = FRAME;
+                entry->writable = writable;
+                hash_insert(page_table, &entry->he);
+                success=true;
             }
+            }
+
+    }else if(entry->status==SWAP) {
+        kpage = frame_get_fr(PAL_DEFAULT, upage);
+        if(kpage != NULL) {
+            swap_load( entry->val, kpage);
+            entry->val =(uint32_t) kpage;
+            entry->status = FRAME;
+            success=true;
         }
     }
 
@@ -173,7 +174,7 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
    UPAGE to the physical frame identified by kernel virtual
    address KPAGE.*/
     if(success) {
-        pagedir_set_page (pagedir, upage, kpage,writable);
+        pagedir_set_page (pagedir, upage, kpage,entry->writable);
     }
     lock_release(&page_table_lock);
     return success;

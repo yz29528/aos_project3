@@ -107,6 +107,7 @@ struct thread
 #ifdef VM
   struct hash* page_table;
   void *esp;
+  struct file* exec_file;
 #endif
 
 #ifdef USERPROG

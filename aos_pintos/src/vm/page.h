@@ -11,7 +11,8 @@
 #include "threads/palloc.h"
 enum page_status {
     FRAME,
-    SWAP
+    SWAP,
+    file
 };
 
 struct page_table_entry {
