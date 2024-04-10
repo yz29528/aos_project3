@@ -19,5 +19,7 @@ void seek (int, unsigned);
 unsigned tell (int);
 void close (int);
 int symlink (char *, char *);
-
+void acquire_filesys_lock();
+void release_filesys_lock();
+bool filesys_lock_held_by_current_thread();
 #endif /* userprog/syscall.h */

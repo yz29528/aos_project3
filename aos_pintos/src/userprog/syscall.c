@@ -27,14 +27,40 @@
 static void syscall_handler (struct intr_frame *);
 static bool valid_ptr (void *);
 
-static struct semaphore filesys_mutex; // Ensure mutual exclusion to filesys
+static struct lock filesys_mutex; // Ensure mutual exclusion to filesys
+static bool filesys_lock_flag=false;
+
+bool filesys_lock_held_by_current_thread (){
+    return lock_held_by_current_thread (&filesys_mutex);
+}
+
+void acquire_filesys_lock() {
+    if(!filesys_lock_held_by_current_thread()) {
+        lock_acquire(&filesys_mutex);
+        filesys_lock_flag=true;
+    }
+}
+
+void release_filesys_lock(){
+    if(filesys_lock_flag) {
+        filesys_lock_flag=false;
+        lock_release(&filesys_mutex);
+    }
+}
+
+void file_lock(){
+    lock_acquire(&filesys_mutex);
+}
+void file_unlock(){
+    lock_release(&filesys_mutex);
+}
 
 const int MAX_OPEN_FILES = 1024; // Max open files per process
 
 void syscall_init (void)
 {
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  sema_init (&filesys_mutex, 1);
+    intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+    lock_init (&filesys_mutex);
 }
 
 /* Check if pointers to arguments are valid */
@@ -269,9 +295,9 @@ bool create (const char *file, unsigned initial_size)
       exit (-1);
     }
 
-  sema_down (&filesys_mutex);
+  file_lock();
   bool opened = filesys_create (file, initial_size);
-  sema_up (&filesys_mutex);
+  file_unlock();
 
   return opened;
 }
@@ -282,9 +308,9 @@ bool remove (const char *file)
     {
       exit (-1);
     }
-  sema_down (&filesys_mutex);
+  file_lock();
   bool removed = filesys_remove (file);
-  sema_up (&filesys_mutex);
+  file_unlock();
   return removed;
 }
 
@@ -309,9 +335,9 @@ int open (const char *filename)
         }
     }
 
-  sema_down (&filesys_mutex);
+  file_lock();
   struct file *file = filesys_open (filename);
-  sema_up (&filesys_mutex);
+  file_unlock();
   if (file == NULL)
     {
       return -1;
@@ -328,9 +354,9 @@ int filesize (int fd)
     {
       return 0;
     }
-  sema_down (&filesys_mutex);
+  file_lock();
   int length = file_length (file);
-  sema_up (&filesys_mutex);
+  file_unlock();
   return length;
 }
 
@@ -370,9 +396,9 @@ int read (int fd, void *buffer, unsigned size)
     }
   else // Read from file
     {
-      sema_down (&filesys_mutex);
+      file_lock();
       bytes_read = file_read (file, buffer, size);
-      sema_up (&filesys_mutex);
+      file_unlock();
     }
 
   return bytes_read;
@@ -400,9 +426,9 @@ int write (int fd, const void *buffer, unsigned size)
       return 0;
     }
 
-  sema_down (&filesys_mutex);
+  file_lock();
   unsigned bytes_written = file_write (file, buffer, size);
-  sema_up (&filesys_mutex);
+  file_unlock();
   return bytes_written;
 }
 
@@ -417,9 +443,9 @@ void seek (int fd, unsigned position)
     {
       return;
     }
-  sema_down (&filesys_mutex);
+  file_lock();
   file_seek (file, position);
-  sema_up (&filesys_mutex);
+  file_unlock();
 }
 
 unsigned tell (int fd)
@@ -433,9 +459,9 @@ unsigned tell (int fd)
     {
       return 0;
     }
-  sema_down (&filesys_mutex);
+  file_lock();
   unsigned pos = file_tell (file);
-  sema_up (&filesys_mutex);
+  file_unlock();
   return pos;
 }
 
@@ -446,26 +472,26 @@ void close (int fd)
     {
       return;
     }
-  sema_down (&filesys_mutex);
+  file_lock();
   file_close (fds[fd]);
   fds[fd] = NULL;
-  sema_up (&filesys_mutex);
+  file_unlock();
 }
 
 int symlink (char *target, char *linkpath)
 {
-  sema_down (&filesys_mutex);
+  file_lock();
   struct file *target_file = filesys_open (target);
-  sema_up (&filesys_mutex);
+  file_unlock();
 
   if (target_file == NULL)
     {
       return -1;
     }
 
-  sema_down (&filesys_mutex);
+  file_lock();
   bool success = filesys_symlink (target, linkpath);
-  sema_up (&filesys_mutex);
+  file_unlock();
 
   return success ? 0 : -1;
 }

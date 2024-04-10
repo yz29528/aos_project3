@@ -108,6 +108,7 @@ struct thread
   struct hash* page_table;
   void *esp;
   struct file* exec_file;
+  struct lock page_table_lock;
 #endif
 
 #ifdef USERPROG

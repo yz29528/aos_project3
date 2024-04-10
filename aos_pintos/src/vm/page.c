@@ -9,7 +9,7 @@
 #include "lib/stddef.h"
 #include "threads/malloc.h"
 #include "lib/debug.h"
-
+#include "lib/kernel/hash.h"
 #define PAL_DEFAULT			0
 #define POINTER_SIZE		32
 //On many GNU/Linux systems, the default limit is 8 MB
@@ -66,11 +66,31 @@ void page_table_destructor(struct hash_elem *e, void *aux UNUSED) {
         pagedir_clear_page(thread_current()->pagedir, entry->key);
         void* kpage=(void*)entry->val;
         if(kpage!=NULL)
-        frame_free_fr(kpage);
+            frame_free_fr(kpage);
     }
     free(entry);
 }
 
+bool page_install_demand_page(void *upage, uint32_t cur_ofs, uint32_t page_read_bytes, bool writable) {
+    struct thread *cur = thread_current();
+    struct hash* page_table = cur->page_table;
+    lock_acquire(&cur->page_table_lock);
+    struct page_table_entry* entry = page_find(page_table, upage);
+    if(entry == NULL && upage < PAGE_STACK_UNDERLINE) {
+        entry = malloc(sizeof(struct page_table_entry));
+        entry->key = upage;
+        entry->val = cur_ofs;
+        entry->page_read_bytes = page_read_bytes;
+        entry->status = FILE;
+        entry->writable = writable;
+        //printf("thread %s try to install_demand_page to page table: offset %x  and upage is:%x\n",cur->name,cur_ofs,upage);
+        hash_insert(page_table, &entry->he);
+        lock_release(&cur->page_table_lock);
+        return true;
+    }
+    lock_release(&cur->page_table_lock);
+    return false;
+}
 
 
 
@@ -89,9 +109,9 @@ bool page_evict_upage(struct thread *holder, void *upage, uint32_t index){
 
 // called in thread_exit?
 void page_destroy_table(struct hash* page_table) {
-    lock_acquire(&page_table_lock);
+    lock_acquire(&thread_current()->page_table_lock);
     hash_destroy(page_table, page_table_destructor);
-    lock_release(&page_table_lock);
+    lock_release(&thread_current()->page_table_lock);
 }
 
 
@@ -106,7 +126,7 @@ bool page_set_frame(void *upage, void *kpage, bool writable) {
     struct hash* page_table = cur->page_table;
     uint32_t *pagedir = cur->pagedir;
     ASSERT(kpage!=NULL)
-    lock_acquire(&page_table_lock);
+    lock_acquire(&thread_current()->page_table_lock);
     struct page_table_entry* entry = page_find(page_table, upage);
     if(entry == NULL) {
         entry = malloc(sizeof(struct page_table_entry));
@@ -118,10 +138,10 @@ bool page_set_frame(void *upage, void *kpage, bool writable) {
         hash_insert(page_table, &entry->he);
 
         ASSERT(pagedir_set_page(pagedir, entry->key, (void*)entry->val, entry->writable));
-        lock_release(&page_table_lock);
+        lock_release(&thread_current()->page_table_lock);
         return true;
     }
-    lock_release(&page_table_lock);
+    lock_release(&thread_current()->page_table_lock);
     return false;
 }
 
@@ -135,7 +155,7 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
     void *upage = pg_round_down(vaddr);
 
     bool success = false;
-    lock_acquire(&page_table_lock);
+    lock_acquire(&cur->page_table_lock);
 
     struct page_table_entry* entry = page_find(page_table, upage);
 
@@ -157,7 +177,7 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
                 hash_insert(page_table, &entry->he);
                 success=true;
             }
-            }
+        }
 
     }else if(entry->status==SWAP) {
         kpage = frame_get_fr(PAL_DEFAULT, upage);
@@ -166,6 +186,29 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
             entry->val =(uint32_t) kpage;
             entry->status = FRAME;
             success=true;
+        }
+    }else if (entry->status == FILE) {
+        kpage = frame_get_fr(PAL_DEFAULT, upage);
+        if (kpage != NULL) {
+            int32_t offset = (int32_t) entry->val;
+            //printf("demand paging___\n");
+
+            //acquire_filesys_lock();
+            acquire_filesys_lock();
+            file_read_at(cur->exec_file, kpage, entry->page_read_bytes, offset);
+            release_filesys_lock();
+            //release_filesys_lock();
+            //printf("demand paging____readpage__%x__\n", entry->page_read_bytes);
+            if (PGSIZE > entry->page_read_bytes) {
+                memset((void *) ((uint32_t) kpage + entry->page_read_bytes), 0,
+                       PGSIZE - entry->page_read_bytes);
+                //printf("demand paging____setzero____\n");
+            }
+            //printf("_____demand paging_____upage_%x__\n",pg_round_down(upage));
+            entry->val = (uint32_t) kpage;
+            entry->status = FRAME;
+            //printf("demand paging_kpage:%x___end____\n",kpage);
+            success = true;
         }
     }
 
@@ -176,7 +219,7 @@ bool page_fault_handler(const void *vaddr, bool writable, void *esp) {
     if(success) {
         pagedir_set_page (pagedir, upage, kpage,entry->writable);
     }
-    lock_release(&page_table_lock);
+    lock_release(&cur->page_table_lock);
     return success;
 }
 

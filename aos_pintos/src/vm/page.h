@@ -12,17 +12,22 @@
 enum page_status {
     FRAME,
     SWAP,
-    file
+    FILE
 };
 
 struct page_table_entry {
     void *key;
     uint32_t val;
+    /*
+     kpage for frame
+     index for swap
+     offset for file
+     */
     enum page_status status;
+    uint32_t page_read_bytes;
     bool writable;
     struct hash_elem he;
 };
-
 void page_init();
 /* basic life cycle *
  */
