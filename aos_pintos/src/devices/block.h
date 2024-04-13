@@ -30,7 +30,7 @@ enum block_type
   BLOCK_FILESYS, /* File system. */
   BLOCK_SCRATCH, /* Scratch. */
   BLOCK_SWAP,    /* Swap. */
-  BLOCK_ROLE_CNT, // [placeholder] - it is turtles all the way down
+  BLOCK_ROLE_CNT,
 
   /* Other kinds of block devices that Pintos may see but does
      not interact with. */

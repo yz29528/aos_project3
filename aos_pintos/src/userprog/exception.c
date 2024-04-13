@@ -1,5 +1,4 @@
 #include "userprog/exception.h"
-#include "userprog/syscall.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include "userprog/gdt.h"
@@ -130,12 +129,6 @@ static void page_fault (struct intr_frame *f)
      (#PF)". */
   asm("movl %%cr2, %0" : "=r"(fault_addr));
 
-#ifndef VM
-    if (fault_addr == NULL || is_kernel_vaddr (fault_addr)) {
-        exit(-1);
-    }
-#endif
-
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
@@ -148,20 +141,14 @@ static void page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-#ifdef VM
-    void* esp=thread_current()->esp;
-     if(user){
-         esp=f->esp;
-     }
-  if(not_present && page_fault_handler(fault_addr, write, esp)) {
-    return;
-  }
-#endif
-    /*printf ("Page fault at %p: %s error %s page in %s context.\n",
-            fault_addr,
-            not_present ? "not present" : "rights violation",
-            write ? "writing" : "reading",
-            user ? "user" : "kernel");
-            */
-  exit(-1);
+  /* To implement virtual memory, delete the rest of the function
+     body, and replace it with code that brings in the page to
+     which fault_addr refers. */
+  printf ("Page fault at %p: %s error %s page in %s context.\n", fault_addr,
+          not_present ? "not present" : "rights violation",
+          write ? "writing" : "reading", user ? "user" : "kernel");
+
+  printf ("There is no crying in Pintos!\n");
+
+  kill (f);
 }

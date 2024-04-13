@@ -147,8 +147,7 @@ static void init_pool (struct pool *p, void *base, size_t page_cnt,
 {
   /* We'll put the pool's used_map at its base.
      Calculate the space needed for the bitmap
-     and subtract it from the pool's size. 
-     [placeholder] - it is turtles all the way down */
+     and subtract it from the pool's size. */
   size_t bm_pages = DIV_ROUND_UP (bitmap_buf_size (page_cnt), PGSIZE);
   if (bm_pages > page_cnt)
     PANIC ("Not enough memory in %s for bitmap.", name);

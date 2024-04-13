@@ -11,13 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "lib/kernel/stdio.h"
-#include "threads/malloc.h"
-#include "userprog/process.h"
 #ifdef USERPROG
 #include "userprog/process.h"
-#include "filesys/filesys.h"
-#include "filesys/file.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -197,30 +192,6 @@ tid_t thread_create (const char *name, int priority, thread_func *function,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
-  t->parent = thread_current (); // Creating thread is parent of new thread
-
-  // Add new thread to children struct of parent
-  struct child *child = malloc (sizeof (struct child));
-  child->child_thread = t;
-  child->exit_status = -1;
-  child->pid = tid;
-  sema_init(&child->exited, 0);
-  list_push_front (&thread_current()->children, &child->elem);
-
-  t->fd_table = (struct file **) palloc_get_page(PAL_USER | PAL_ZERO);
-  if (t->fd_table == NULL){
-    free(child);
-    palloc_free_page(t);
-    return TID_ERROR;
-  }
-  
-  // Deny writes to currently executing file
-  if (strcmp("idle", name)){
-    t->fd_table[0] = filesys_open(name);
-    if (t->fd_table[0] != NULL)
-      file_deny_write(t->fd_table[0]);
-  }
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -457,15 +428,10 @@ static void init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-#ifdef VM
-    lock_init(&t->page_table_lock);
-#endif
+
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
-
-  sema_init (&t->child_created, 0);
-  list_init (&t->children);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

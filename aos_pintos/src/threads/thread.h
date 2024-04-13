@@ -3,9 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
-#include <hash.h>
 #include <stdint.h>
-#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -96,20 +94,6 @@ struct thread
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
-
-  struct thread* parent; // Pointer to parent thread
-  struct list children; // List of children threads & metadata
-
-  struct semaphore child_created; // Synchronize exec method
-  bool success; // Was exec successful 
-
-  struct file** fd_table; // Map fd (index) to files
-#ifdef VM
-  struct hash* page_table;
-  void *esp;
-  struct file* exec_file;
-  struct lock page_table_lock;
-#endif
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
